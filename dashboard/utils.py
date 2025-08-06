@@ -4,10 +4,11 @@ import plotly.graph_objects as go
 import plotly.express as px
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional
+from .config import API_BASE_URL
 
 class APIClient:
-    def __init__(self, base_url: str = "http://localhost:8000"):
-        self.base_url = base_url
+    def __init__(self, base_url: str = None):
+        self.base_url = base_url or API_BASE_URL
     
     def get_current_prices(self) -> Dict:
         """Get current prices for all commodities"""
