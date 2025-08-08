@@ -84,6 +84,20 @@ class DatabaseHandler:
                 FOREIGN KEY (rule_id) REFERENCES alert_rules (id)
             )
         ''')
+
+        # Create model_metrics table for monitoring
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS model_metrics (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                commodity TEXT NOT NULL,
+                train_rmse REAL,
+                test_rmse REAL,
+                test_mae REAL,
+                framework TEXT,
+                model_path TEXT,
+                created_at TEXT NOT NULL
+            )
+        ''')
         
         conn.commit()
         conn.close()
@@ -116,7 +130,30 @@ class DatabaseHandler:
         
         conn.close()
         return df.to_dict('records')
-    
+
+    def log_model_metrics(self, commodity: str, train_rmse: float, test_rmse: float, test_mae: float, framework: str, model_path: str):
+        """Persist model metrics to SQLite"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        cursor.execute('''
+            INSERT INTO model_metrics (commodity, train_rmse, test_rmse, test_mae, framework, model_path, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        ''', (commodity.upper(), float(train_rmse), float(test_rmse), float(test_mae), framework, model_path, datetime.now().isoformat()))
+        conn.commit()
+        conn.close()
+
+    def get_model_metrics(self, commodity: Optional[str] = None, limit: int = 100):
+        """Fetch model metrics history from SQLite"""
+        conn = sqlite3.connect(self.db_path)
+        if commodity:
+            query = "SELECT * FROM model_metrics WHERE commodity = ? ORDER BY created_at DESC LIMIT ?"
+            df = pd.read_sql_query(query, conn, params=(commodity.upper(), limit))
+        else:
+            query = "SELECT * FROM model_metrics ORDER BY created_at DESC LIMIT ?"
+            df = pd.read_sql_query(query, conn, params=(limit,))
+        conn.close()
+        return df.to_dict('records')
+
     def create_alert_rule(self, rule: AlertRule) -> int:
         """Create a new alert rule"""
         conn = sqlite3.connect(self.db_path)

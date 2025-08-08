@@ -97,6 +97,35 @@ class APIClient:
             print(f"Error training model for {commodity}: {e}")
             return {}
 
+    def get_model_metrics(self, commodity: str = None, limit: int = 200) -> Dict:
+        """Get model metrics history"""
+        try:
+            if commodity:
+                url = f"{self.base_url}/models/metrics/{commodity}?limit={limit}"
+            else:
+                url = f"{self.base_url}/models/metrics?limit={limit}"
+            response = requests.get(url)
+            response.raise_for_status()
+            return response.json()
+        except Exception as e:
+            print(f"Error fetching model metrics: {e}")
+            return {"metrics": []}
+
+    def get_correlation(self, commodities: Optional[List[str]] = None, window_days: int = 60) -> Dict:
+        """Get correlation analysis for commodity returns"""
+        try:
+            params = {"window_days": window_days}
+            if commodities:
+                # Repeat params for list values
+                for c in commodities:
+                    params.setdefault("commodities", []).append(c)
+            response = requests.get(f"{self.base_url}/analytics/correlation", params=params)
+            response.raise_for_status()
+            return response.json()
+        except Exception as e:
+            print(f"Error fetching correlation analysis: {e}")
+            return {}
+
 class ChartGenerator:
     @staticmethod
     def create_price_chart(price_data: List[Dict], commodity: str, predictions: Optional[List[Dict]] = None):

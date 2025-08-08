@@ -1,0 +1,26 @@
+version: '3.9'
+services:
+  api:
+    build: .
+    container_name: commodity_api
+    environment:
+      - JAVA_HOME=/usr/lib/jvm/java-11-openjdk-amd64
+      - API_PORT=8000
+    volumes:
+      - ./:/app
+    ports:
+      - "8000:8000"
+    command: ["uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000"]
+
+  dashboard:
+    build: .
+    container_name: commodity_dashboard
+    depends_on:
+      - api
+    environment:
+      - API_BASE_URL=http://api:8000
+    volumes:
+      - ./:/app
+    ports:
+      - "8501:8501"
+    command: ["streamlit", "run", "dashboard/app.py", "--server.port", "8501", "--server.address", "0.0.0.0"]

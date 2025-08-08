@@ -18,6 +18,8 @@ import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from analytics.spark_etl import CommoditySparkETL
 from analytics.scheduler import get_scheduler, start_scheduler
+import numpy as np
+import pandas as pd
 
 # Initialize FastAPI app
 app = FastAPI(
@@ -69,6 +71,10 @@ async def update_prices_background():
 @app.on_event("startup")
 async def startup_event():
     global etl_scheduler
+    
+    if os.getenv("DISABLE_BACKGROUND_JOBS") == "1":
+        print("Background jobs disabled for test environment")
+        return
     
     # Start background price monitoring
     asyncio.create_task(update_prices_background())
@@ -311,6 +317,24 @@ async def retrain_all_models():
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.get("/models/metrics")
+async def get_all_model_metrics(limit: int = 200):
+    """Get historical model metrics for all commodities"""
+    try:
+        metrics = db_handler.get_model_metrics(limit=limit)
+        return {"count": len(metrics), "metrics": metrics}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/models/metrics/{commodity}")
+async def get_model_metrics_for_commodity(commodity: str, limit: int = 200):
+    """Get historical model metrics for a specific commodity"""
+    try:
+        metrics = db_handler.get_model_metrics(commodity=commodity, limit=limit)
+        return {"commodity": commodity.upper(), "count": len(metrics), "metrics": metrics}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.get("/health")
 async def health_check():
     """Health check endpoint"""
@@ -452,6 +476,37 @@ async def get_commodity_analytics(commodity: str, kpi_type: str = "overall"):
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error loading analytics: {str(e)}")
+
+@app.get("/analytics/correlation")
+async def get_correlation_analysis(commodities: Optional[List[str]] = None, window_days: int = 60):
+    """Compute Pearson correlation matrix of daily returns among commodities"""
+    try:
+        target_commodities = commodities or ["gold", "silver", "oil", "gas"]
+        price_series = {}
+        for c in target_commodities:
+            records = db_handler.get_prices(commodity=c, limit=window_days * 24)
+            if not records:
+                continue
+            df = pd.DataFrame(records)
+            df['timestamp'] = pd.to_datetime(df['timestamp'])
+            df = df.sort_values('timestamp')
+            df['return'] = df['price'].pct_change()
+            price_series[c.upper()] = df['return'].dropna().reset_index(drop=True)
+        if not price_series:
+            return {"message": "No data available for correlation analysis"}
+        # Align series by length
+        min_len = min(len(s) for s in price_series.values())
+        aligned = {k: v.iloc[-min_len:].values for k, v in price_series.items()}
+        matrix = np.corrcoef([aligned[k] for k in sorted(aligned.keys())])
+        labels = sorted(aligned.keys())
+        # Convert to list of dicts
+        corr = []
+        for i, row_label in enumerate(labels):
+            row = {labels[j]: float(matrix[i, j]) for j in range(len(labels))}
+            corr.append({"commodity": row_label, **row})
+        return {"window_days": window_days, "commodities": labels, "correlation_matrix": corr}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/analytics/{commodity}/summary")
 async def get_commodity_analytics_summary(commodity: str):
