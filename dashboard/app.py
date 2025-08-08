@@ -25,7 +25,7 @@ api_client = get_api_client()
 st.sidebar.title("📈 Commodity Monitor")
 page = st.sidebar.selectbox(
     "Navigate to:",
-    ["Overview", "Price Charts", "Alerts", "Predictions", "Analytics", "Settings"]
+    ["Overview", "Price Charts", "Alerts", "Predictions", "Analytics", "Monitoring", "Settings"]
 )
 
 # Auto-refresh option
@@ -482,6 +482,49 @@ elif page == "Analytics":
     
     else:
         st.warning("Analytics data not available. Please run an ETL job first.")
+
+elif page == "Monitoring":
+    st.title("🧪 Model Monitoring & Statistical Analysis")
+    st.info("Track model performance over time and analyze commodity relationships")
+
+    tab1, tab2 = st.tabs(["Model Metrics", "Correlation Analysis"])
+
+    with tab1:
+        st.subheader("Historical Model Performance")
+        selected_commodity = st.selectbox("Commodity:", ["ALL", "gold", "silver", "oil", "gas"], index=0)
+        limit = st.slider("Max records:", 50, 500, 200)
+        if selected_commodity == "ALL":
+            data = api_client.get_model_metrics(limit=limit)
+        else:
+            data = api_client.get_model_metrics(commodity=selected_commodity, limit=limit)
+        metrics = data.get('metrics', [])
+        if metrics:
+            df = pd.DataFrame(metrics)
+            df['created_at'] = pd.to_datetime(df['created_at'])
+            df = df.sort_values('created_at')
+            st.line_chart(df.set_index('created_at')[['train_rmse', 'test_rmse', 'test_mae']])
+            st.dataframe(df[['created_at','commodity','train_rmse','test_rmse','test_mae','framework','model_path']], use_container_width=True)
+        else:
+            st.warning("No metrics available yet. Train or retrain models to generate metrics.")
+
+    with tab2:
+        st.subheader("Correlation of Daily Returns")
+        selected = st.multiselect("Select commodities:", ["gold", "silver", "oil", "gas"], default=["gold","silver","oil","gas"])
+        window = st.slider("Window (days):", 14, 120, 60)
+        result = api_client.get_correlation(commodities=selected, window_days=window)
+        if result and 'correlation_matrix' in result:
+            corr_rows = result['correlation_matrix']
+            corr_df = pd.DataFrame(corr_rows).set_index('commodity')
+            st.dataframe(corr_df, use_container_width=True)
+            try:
+                import plotly.express as px
+                fig = px.imshow(corr_df.astype(float), text_auto=True, aspect='auto', color_continuous_scale='RdBu', origin='lower')
+                fig.update_layout(title='Correlation Heatmap')
+                st.plotly_chart(fig, use_container_width=True)
+            except Exception:
+                pass
+        else:
+            st.warning(result.get('message', 'Correlation data unavailable'))
 
 elif page == "Settings":
     st.title("⚙️ Settings & Configuration")

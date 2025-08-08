@@ -309,18 +309,64 @@ uvicorn api.main:app --host 0.0.0.0 --port 8000 --workers 4
 streamlit run dashboard/app.py --server.port 8501 --server.address 0.0.0.0
 ```
 
-## 🛠️ Troubleshooting
+## 🔄 CI/CD (GitHub Actions)
 
-If you encounter issues, check the detailed troubleshooting guide:
+- Automated workflow in `.github/workflows/ci.yml` runs on every push and pull request
+- Steps:
+  - Set up Python 3.10 and Java 11 for PySpark
+  - Install dependencies
+  - Lint with `flake8`
+  - Run unit tests with `pytest` (see `tests/`)
 
-📖 **[TROUBLESHOOTING.md](TROUBLESHOOTING.md)** - Comprehensive guide for common issues and solutions
+Local linting and tests:
+```bash
+pip install flake8 pytest
+flake8 .
+pytest -q
+```
 
-Common issues include:
-- Missing dependencies
-- Database connection problems
-- ML model loading issues
-- Analytics endpoint errors
-- Dashboard connection problems
+## 🐳 Docker & Compose
+
+- `Dockerfile` builds a single image with FastAPI + PySpark + PyTorch (CPU)
+- `docker-compose.yml` runs:
+  - `api` on port 8000
+  - `dashboard` on port 8501 (talks to `api` service)
+
+Build and run:
+```bash
+# build
+docker compose build
+# run
+docker compose up
+# visit
+# API: http://localhost:8000/docs
+# Dashboard: http://localhost:8501
+```
+
+## 📈 Model Monitoring
+
+- Training logs metrics (RMSE, MAE) to SQLite `model_metrics` table and CSV `commodity_platform/model_metrics.csv`
+- API endpoints:
+  - `GET /models/metrics` (all)
+  - `GET /models/metrics/{commodity}` (filtered)
+- Streamlit page "Monitoring" visualizes metric trends and correlation heatmap of returns
+
+## 📊 Statistical Analysis
+
+- `GET /analytics/correlation` computes Pearson correlation matrix of daily returns across selected commodities
+- View in Dashboard → Monitoring → Correlation Analysis
+
+## 🧑‍💼 Ways of Working (Agile & Stakeholders)
+
+- CI/CD on PRs for rapid feedback, code quality gates (lint + tests)
+- Modular Python packages (`api`, `analytics`, `dashboard`) enabling iterative delivery
+- Dashboards and APIs expose metrics for stakeholder reporting and decision support
+- Ready for cloud via containerization; deploy behind an API gateway and managed SQLite/relational DB
+
+## 🧰 Developer Notes
+
+- Style checks via `.flake8` (line length 120)
+- Tests in `tests/` are minimal; extend with unit and integration tests as needed
 
 ## 🤝 Contributing
 

@@ -276,6 +276,42 @@ class CommodityPredictor:
             self.models[commodity] = model
             self.scalers[commodity] = scaler
             
+            # Log metrics to SQLite and CSV for monitoring
+            try:
+                db = DatabaseHandler()
+                db.log_model_metrics(
+                    commodity=commodity,
+                    train_rmse=float(train_rmse),
+                    test_rmse=float(test_rmse),
+                    test_mae=float(test_mae),
+                    framework='PyTorch',
+                    model_path=model_file,
+                )
+            except Exception as log_err:
+                print(f"Warning: failed to log metrics to DB: {log_err}")
+
+            try:
+                # Append to CSV for easy dashboard plotting
+                import csv
+                os.makedirs('commodity_platform', exist_ok=True)
+                csv_path = os.path.join('commodity_platform', 'model_metrics.csv')
+                file_exists = os.path.exists(csv_path)
+                with open(csv_path, 'a', newline='') as f:
+                    writer = csv.DictWriter(f, fieldnames=['created_at','commodity','train_rmse','test_rmse','test_mae','framework','model_path'])
+                    if not file_exists:
+                        writer.writeheader()
+                    writer.writerow({
+                        'created_at': datetime.now().isoformat(),
+                        'commodity': commodity.upper(),
+                        'train_rmse': float(train_rmse),
+                        'test_rmse': float(test_rmse),
+                        'test_mae': float(test_mae),
+                        'framework': 'PyTorch',
+                        'model_path': model_file,
+                    })
+            except Exception as csv_err:
+                print(f"Warning: failed to log metrics to CSV: {csv_err}")
+
             return {
                 'success': True,
                 'train_rmse': float(train_rmse),
